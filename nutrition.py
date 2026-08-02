@@ -35,7 +35,8 @@ def get_args():
     
     parser.add_argument('-f', '--file',
                         '-v', '--version',
-                        
+                        action='version',
+                        version=f'%(prog)s {__version__}',
                         help='DB file name',
                         metavar='str',
                         type=str,
