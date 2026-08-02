@@ -8,9 +8,6 @@ Created on Mon Oct 16 11:45:13 2023
 
 __version__ = '1.0.1'
 
-from col_heads import col_heads, heads
-from col_heads import col_dict, heads_dict
-from col_heads import default_fields, default_heads
 from tabulate import tabulate
 from pprint import pprint
 import csv
@@ -19,6 +16,7 @@ import re
 import sys
 import pyinputplus as pyip
 import argparse
+import db_config
 
 # --------------------------------------------------
 def get_args():
@@ -28,44 +26,60 @@ def get_args():
         description='Nutrition',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-    # parser.add_argument('DBfile',
-    #                     metavar='str',
-    #                     help='DB file to load',
-    #                     default='usda_data.csv')
-    
     parser.add_argument('-f', '--file',
-                        '-v', '--version',
-                        action='version',
-                        version=f'%(prog)s {__version__}',
                         help='DB file name',
                         metavar='str',
                         type=str,
                         default='usda_data.csv')
+    parser.add_argument('-d', '--delim',
+                        help='Field delimiter character (only used the first time this DB is loaded)',
+                        metavar='str',
+                        type=str,
+                        default=',')
+    parser.add_argument('-q', '--quote',
+                        help='Quote character (only used the first time this DB is loaded)',
+                        metavar='str',
+                        type=str,
+                        default='"')
+    parser.add_argument('-v', '--version',
+                        action='version',
+                        version=f'%(prog)s {__version__}')
     return parser.parse_args()
 
 
-db_file = get_args().file
-if db_file == 'usda_data.csv':
-    delim = '^'
-    quote = '$'
-    descr = 'Shrt_Desc'
-elif db_file == 'usda_dataC.csv':     # comma delimited file
-    delim = ','
-    quote = '~'
-    descr = 'Shrt_Desc'
+def get_header_fields(db_file, delim, quote) -> list:
+    """Return the column names from a CSV file's header row."""
+    with open(db_file, newline='', encoding='latin-1') as csvfile:
+        reader = csv.DictReader(csvfile, delimiter=delim, quotechar=quote)
+        return reader.fieldnames
+
+
+args = get_args()
+db_file = args.file
+
+db_entry = db_config.get_db_entry(db_file)
+if db_entry:
+    delim = db_entry.get('delim', args.delim)
+    quote = db_entry.get('quote', args.quote)
 else:
-    delim = ','
-    quote = '"'
-    descr = 'name'
-    col_heads = heads
-    col_dict = heads_dict
-    default_fields = default_heads
+    delim = args.delim
+    quote = args.quote
+    db_config.set_db_entry(db_file, delim, quote)
+
+col_names = get_header_fields(db_file, delim, quote)
+descr = col_names[1]
+ingredient_cols = col_names[2:]
+col_dict = dict(enumerate(ingredient_cols, start=1))
+
+groups = (db_config.get_db_entry(db_file) or {}).get('groups', {})
+if 'default' not in groups:
+    db_config.save_group(db_file, 'default', ingredient_cols)
+    groups['default'] = ingredient_cols
+default_fields = groups['default']
 
 
 def main():
 
-    args = get_args()
-    db_file = args.file    
     db = read_csv(db_file)
     convert_lower(db)
     fields = default_fields
@@ -90,10 +104,10 @@ def main():
                         break
                     entries = search_Shrt_Desc(foods, fields, db)
                     for entry in entries:
-                        print(tabulate(entry, fields))  
+                        print(tabulate(entry, fields))
                         print()
             elif choice == 'Choose your own columns(ingredients, nutrients)':
-                fields = choose_fields(default_fields)
+                fields = choose_fields(fields)
                 # choice = None
             elif choice == 'Print list of available column names(ingredients, nutrients)':
                 pprint(col_dict, compact=True, depth=40)
@@ -110,7 +124,7 @@ def read_csv(db_file) -> list:
     -------
     list
         List of lists(rows in database).
-    """        
+    """
     with open(db_file, newline='', encoding='latin-1') as csvfile:
         reader = csv.DictReader(csvfile,
                                 # fieldnames=col_heads,
@@ -144,7 +158,7 @@ def search_Shrt_Desc(foods, fields, db) -> list:
         match_row = True
         for food in foods:
             if not re.search(food, row[descr]):
-                match_row = False 
+                match_row = False
         if match_row:
             match.append(row[descr])
             for field in fields:
@@ -178,7 +192,7 @@ def search_foods() -> list:
 
 
 def choose_action():
-    
+
     print()
     choice = pyip.inputMenu(['Search food database',
                             'Print list of available column names(ingredients, nutrients)',
@@ -187,12 +201,14 @@ def choose_action():
     print(f' - {choice}\n')
     return choice
 
-def choose_fields(default_fields) -> list:
+def choose_fields(current_fields) -> list:
     """
+    Choose a field selection by column number, or manage saved groupings.
+
     Parameters
     ----------
-    default_fields : List
-        Default column headers (ingredients, nutrients).
+    current_fields : List
+        Currently active column headers (ingredients, nutrients).
 
     Returns
     -------
@@ -201,23 +217,50 @@ def choose_fields(default_fields) -> list:
 
     """
     while True:
+        saved_groups = (db_config.get_db_entry(db_file) or {}).get('groups', {})
+        print(f'Saved groups: {", ".join(saved_groups) if saved_groups else "(none)"}')
         print('Enter "D" for default column headers')
-        field_nums = input('Enter column numbers(separated by space): ').split()
-        new_fields = []
-        if not field_nums:
-            return default_fields
-        if any(n.lower() == 'd' for n in field_nums):
+        print('Enter "L <name>" to load a saved group')
+        print('Enter "X <name>" to delete a saved group')
+        entry = input('Enter column numbers(separated by space): ').split()
+
+        if not entry:
+            return current_fields
+
+        cmd = entry[0].lower()
+
+        if cmd == 'd':
             return default_fields
 
-        invalid = [n for n in field_nums if not n.isdigit() or int(n) not in col_dict]
+        if cmd == 'l' and len(entry) > 1:
+            name = entry[1]
+            if name in saved_groups:
+                return saved_groups[name]
+            print(f'No such group: {name}')
+            print()
+            continue
+
+        if cmd == 'x' and len(entry) > 1:
+            name = entry[1]
+            db_config.delete_group(db_file, name)
+            print(f'Deleted group: {name}')
+            print()
+            continue
+
+        invalid = [n for n in entry if not n.isdigit() or int(n) not in col_dict]
         if invalid:
             print(f'Invalid entry: {" ".join(invalid)}')
             print(f'Please enter "D" or numbers between {min(col_dict)} '
                   f'and {max(col_dict)}, separated by spaces.')
+            print()
             continue
 
-        for n in field_nums:
-            new_fields.append(col_dict[int(n)])
+        new_fields = [col_dict[int(n)] for n in entry]
+
+        name = input('Save this selection as a group? Enter a name, or leave blank to skip: ').strip()
+        if name:
+            db_config.save_group(db_file, name, new_fields)
+
         return new_fields
 
 def validate_food(food):

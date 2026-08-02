@@ -3,4 +3,5 @@
 .history
 __pycache__/
 data/
+db_config.json
 
