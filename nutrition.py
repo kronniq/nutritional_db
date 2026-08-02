@@ -18,6 +18,8 @@ import sys
 import pyinputplus as pyip
 import argparse
 
+__version__ = '1.0.0'
+
 # --------------------------------------------------
 def get_args():
     """Get command-line arguments"""
@@ -31,8 +33,9 @@ def get_args():
     #                     help='DB file to load',
     #                     default='usda_data.csv')
     
-    parser.add_argument('-f',
-                        '--file',
+    parser.add_argument('-f', '--file',
+                        '-v', '--version',
+                        
                         help='DB file name',
                         metavar='str',
                         type=str,
