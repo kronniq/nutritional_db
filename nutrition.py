@@ -6,6 +6,8 @@ Created on Mon Oct 16 11:45:13 2023
 @author: kronq
 """
 
+__version__ = '1.0.0'
+
 from col_heads import col_heads, heads
 from col_heads import col_dict, heads_dict
 from col_heads import default_fields, default_heads
@@ -17,8 +19,6 @@ import re
 import sys
 import pyinputplus as pyip
 import argparse
-
-__version__ = '1.0.0'
 
 # --------------------------------------------------
 def get_args():
