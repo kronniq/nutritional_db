@@ -6,10 +6,10 @@ Created on Wed Oct 18 10:46:43 2023
 @author: kronq
 """
 
-##############################################
-# Column headers and defaults for
-# data.csv database
-##############################################
+######################################################
+## Column headers and defaults for the USDA databases
+## usda_data.csv & usda_dataC.csv 
+######################################################
 
 col_heads = [
  'Shrt_Desc',
@@ -180,7 +180,7 @@ default_heads = [
  'Sodium (mg)',
  'Potassium, K (mg)',
  'Phosphorus, P (mg)',
- 'Iron, Fe (mg)'
+ 'Iron, Fe (mg)',
  'Calcium (mg)',
  'Serving Weight 1 (g)',
  'Serving Description 1 (g)'

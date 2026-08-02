@@ -43,14 +43,14 @@ def get_args():
 db_file = get_args().file
 if db_file == 'usda_data.csv':
     delim = '^'
-    quote = '~'
+    quote = '$'
     descr = 'Shrt_Desc'
 elif db_file == 'usda_dataC.csv':     # comma delimited file
     delim = ','
     quote = '~'
     descr = 'Shrt_Desc'
 else:
-    delim = '^'
+    delim = ','
     quote = '"'
     descr = 'name'
     col_heads = heads
