@@ -6,9 +6,10 @@ Created on Wed Oct 18 10:46:43 2023
 @author: kronq
 """
 
+##############################################
 # Column headers and defaults for
 # data.csv database
-#
+##############################################
 
 col_heads = [
  'Shrt_Desc',
@@ -89,7 +90,7 @@ default_fields = ['Energ_Kcal',
                   'Sugar_Tot_(g)',
                   'Fiber_TD_(g)', 
                   'Protein_(g)', 
-                  'Vit_A_RAE_(mcg)',
+                  'Vit_A_RAE',
                   'Vit_C_(mg)', 
                   'Thiamin_(mg)', 
                   'Niacin_(mg)', 
@@ -135,7 +136,7 @@ col_dict = {
  31: 'Choline_Tot_(mg)',
  32: 'Vit_B12_(µg)',
  33: 'Vit_A_IU',
- 34: 'Vit_A_RAE_(mcg)',
+ 34: 'Vit_A_RAE',
  35: 'Retinol_(µg)',
  36: 'Alpha_Carot_(µg)',
  37: 'Beta_Carot_(µg)',
@@ -156,9 +157,11 @@ col_dict = {
  52: 'GmWt_Desc2',
  53: 'Refuse_Pct'}
 
+##############################################
 # Column headers and defaults for
 # MyDataFood.csv database
-#
+##############################################
+
 default_heads = [
  # 'name',
  # 'Food Group',
