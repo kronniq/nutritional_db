@@ -6,7 +6,7 @@ Created on Mon Oct 16 11:45:13 2023
 @author: kronq
 """
 
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 from col_heads import col_heads, heads
 from col_heads import col_dict, heads_dict
