@@ -27,20 +27,22 @@ def get_args():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     parser.add_argument('-f', '--file',
-                        help='DB file name',
+                        help='DB file name (defaults to the last DB used, if any)',
                         metavar='str',
                         type=str,
-                        default='usda_data.csv')
+                        default=None)
     parser.add_argument('-d', '--delim',
-                        help='Field delimiter character (only used the first time this DB is loaded)',
+                        help='Field delimiter character (defaults to ",", or the value stored '
+                             'for this DB if seen before; passing this always overrides the stored value)',
                         metavar='str',
                         type=str,
-                        default=',')
+                        default=None)
     parser.add_argument('-q', '--quote',
-                        help='Quote character (only used the first time this DB is loaded)',
+                        help='Quote character (defaults to \'"\', or the value stored '
+                             'for this DB if seen before; passing this always overrides the stored value)',
                         metavar='str',
                         type=str,
-                        default='"')
+                        default=None)
     parser.add_argument('-v', '--version',
                         action='version',
                         version=f'%(prog)s {__version__}')
@@ -54,41 +56,72 @@ def get_header_fields(db_file, delim, quote) -> list:
         return reader.fieldnames
 
 
-args = get_args()
-db_file = args.file
+def find_csv_files() -> list:
+    """CSV files present in the current directory."""
+    return sorted(f for f in os.listdir('.') if f.lower().endswith('.csv'))
 
-db_entry = db_config.get_db_entry(db_file)
-if db_entry:
-    delim = db_entry.get('delim', args.delim)
-    quote = db_entry.get('quote', args.quote)
-else:
-    delim = args.delim
-    quote = args.quote
-    db_config.set_db_entry(db_file, delim, quote)
+
+args = get_args()
+db_file = args.file or db_config.get_last_db()
+
+if not db_file or not os.path.isfile(db_file):
+    if db_file:
+        print(f"DB file '{db_file}' was not found.")
+    else:
+        print('No DB file specified and no previously used DB on record.')
+    candidates = find_csv_files()
+    if candidates:
+        print('CSV files available in this folder:')
+        for candidate in candidates:
+            print(f'  {candidate}')
+        print('Re-run with -f <filename> to choose one.')
+    else:
+        print('No CSV files found in this folder either.')
+    sys.exit(1)
+
+db_config.set_last_db(db_file)
+
+db_entry = db_config.get_db_entry(db_file) or {}
+delim = args.delim or db_entry.get('delim') or ','
+quote = args.quote or db_entry.get('quote') or '"'
 
 col_names = get_header_fields(db_file, delim, quote)
+if len(col_names) < 2:
+    sys.exit(f"Error: parsing '{db_file}' with delimiter {delim!r} and quote {quote!r} "
+             f"produced only {len(col_names)} column(s) (need at least id + name). "
+             f"Pass the correct -d/--delim and -q/--quote for this file.")
+
+db_config.set_db_entry(db_file, delim, quote)
+
 descr = col_names[1]
 ingredient_cols = col_names[2:]
 col_dict = dict(enumerate(ingredient_cols, start=1))
 
-groups = (db_config.get_db_entry(db_file) or {}).get('groups', {})
+db_entry = db_config.get_db_entry(db_file) or {}
+groups = db_entry.get('groups', {})
 if 'default' not in groups:
     db_config.save_group(db_file, 'default', ingredient_cols)
     groups['default'] = ingredient_cols
 default_fields = groups['default']
+
+last_group = db_entry.get('last_group', 'default')
+if last_group not in groups:
+    last_group = 'default'
+initial_fields = groups[last_group]
 
 
 def main():
 
     db = read_csv(db_file)
     convert_lower(db)
-    fields = default_fields
+    fields = initial_fields
+    group_name = last_group
     choice = None
 
     try:
         while True:
             # if not choice:
-            choice = choose_action()
+            choice = choose_action(group_name)
             if choice == 'Search food database':
                 if os.name == 'posix':
                     print('<control-D> to quit')
@@ -103,15 +136,19 @@ def main():
                     if ord(foods[0][0]) == 60:
                         break
                     entries = search_Shrt_Desc(foods, fields, db)
+                    headers = [group_name] + fields
+                    colalign = ['right'] + ['left'] * len(fields)
                     for entry in entries:
-                        print(tabulate(entry, fields))
+                        print(tabulate(entry, headers, colalign=colalign))
                         print()
             elif choice == 'Choose your own columns(ingredients, nutrients)':
-                fields = choose_fields(fields)
+                fields, group_name = choose_fields(fields, group_name)
                 # choice = None
             elif choice == 'Print list of available column names(ingredients, nutrients)':
                 pprint(col_dict, compact=True, depth=40)
                 # choice = None
+            elif choice == 'List available databases':
+                list_databases(group_name)
             elif choice == 'Quit':
                 sys.exit()
 
@@ -191,17 +228,49 @@ def search_foods() -> list:
             sys.exit()
 
 
-def choose_action():
+def print_banner(group_name) -> None:
+    label = f'Database: {os.path.basename(db_file)}   |   Group: {group_name or "(unsaved selection)"}'
+    rule = '=' * len(label)
+    print(rule)
+    print(label)
+    print(rule)
 
+
+def choose_action(group_name):
+
+    print()
+    print_banner(group_name)
     print()
     choice = pyip.inputMenu(['Search food database',
                             'Print list of available column names(ingredients, nutrients)',
                             'Choose your own columns(ingredients, nutrients)',
+                            'List available databases',
                             'Quit'], numbered=True)
     print(f' - {choice}\n')
     return choice
 
-def choose_fields(current_fields) -> list:
+
+def list_databases(group_name) -> None:
+    print()
+    print(f'Current database: {os.path.basename(db_file)}')
+    print(f'Current group: {group_name or "(unsaved selection)"}')
+    print()
+    candidates = find_csv_files()
+    if not candidates:
+        print('No CSV files found in this folder.')
+        return
+    print('Databases in this folder:')
+    for candidate in candidates:
+        marker = '*' if os.path.abspath(candidate) == os.path.abspath(db_file) else ' '
+        entry = db_config.get_db_entry(candidate)
+        if entry:
+            group_names = ', '.join(entry.get('groups', {})) or '(none)'
+            print(f' {marker} {candidate} -- groups: {group_names} '
+                  f'(last used: {entry.get("last_group", "default")})')
+        else:
+            print(f' {marker} {candidate} -- not configured yet')
+
+def choose_fields(current_fields, current_group) -> tuple:
     """
     Choose a field selection by column number, or manage saved groupings.
 
@@ -209,11 +278,13 @@ def choose_fields(current_fields) -> list:
     ----------
     current_fields : List
         Currently active column headers (ingredients, nutrients).
+    current_group : str
+        Name of the currently active group.
 
     Returns
     -------
-    list
-        User defined list of column headers.
+    tuple
+        (list of column headers, name of the active group or '' if unsaved)
 
     """
     while True:
@@ -225,17 +296,19 @@ def choose_fields(current_fields) -> list:
         entry = input('Enter column numbers(separated by space): ').split()
 
         if not entry:
-            return current_fields
+            return current_fields, current_group
 
         cmd = entry[0].lower()
 
         if cmd == 'd':
-            return default_fields
+            db_config.set_last_group(db_file, 'default')
+            return default_fields, 'default'
 
         if cmd == 'l' and len(entry) > 1:
             name = entry[1]
             if name in saved_groups:
-                return saved_groups[name]
+                db_config.set_last_group(db_file, name)
+                return saved_groups[name], name
             print(f'No such group: {name}')
             print()
             continue
@@ -256,12 +329,21 @@ def choose_fields(current_fields) -> list:
             continue
 
         new_fields = [col_dict[int(n)] for n in entry]
+        print(f'Selected: {", ".join(new_fields)}')
 
-        name = input('Save this selection as a group? Enter a name, or leave blank to skip: ').strip()
-        if name:
+        while True:
+            name = input('Save this selection as a group? Enter a single-word name '
+                          '(letters/digits/_/-), or leave blank to skip: ').strip()
+            if not name:
+                return new_fields, ''
+            if not re.fullmatch(r'[A-Za-z_][\w-]*', name):
+                print(f'Invalid name: {name!r}. Use one word, starting with a letter or '
+                      f'underscore, containing only letters/digits/_/- (no spaces).')
+                print()
+                continue
             db_config.save_group(db_file, name, new_fields)
-
-        return new_fields
+            db_config.set_last_group(db_file, name)
+            return new_fields, name
 
 def validate_food(food):
 
