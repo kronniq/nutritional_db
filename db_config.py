@@ -6,6 +6,7 @@ import json
 import os
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'db_config.json')
+LAST_DB_KEY = '__last_db__'
 
 
 def load_config() -> dict:
@@ -45,3 +46,20 @@ def delete_group(path: str, name: str) -> None:
     if entry and name in entry.get('groups', {}):
         del entry['groups'][name]
         save_config(config)
+
+
+def set_last_group(path: str, name: str) -> None:
+    config = load_config()
+    entry = config.setdefault(os.path.abspath(path), {'groups': {}})
+    entry['last_group'] = name
+    save_config(config)
+
+
+def get_last_db() -> str | None:
+    return load_config().get(LAST_DB_KEY)
+
+
+def set_last_db(path: str) -> None:
+    config = load_config()
+    config[LAST_DB_KEY] = os.path.abspath(path)
+    save_config(config)
