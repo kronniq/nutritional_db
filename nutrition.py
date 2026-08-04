@@ -6,7 +6,7 @@ Created on Mon Oct 16 11:45:13 2023
 @author: kronq
 """
 
-__version__ = '1.0.1'
+__version__ = '0.0.1'
 
 from tabulate import tabulate
 from pprint import pprint
